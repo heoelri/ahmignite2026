@@ -1,0 +1,100 @@
+{
+  "components": [
+    { "name": "browse-web", "label": "Menu website", "role": "frontend", "flow": "browse", "parent": "browse", "purpose": "Serves the menu page" },
+    { "name": "browse-api", "label": "Menu service", "role": "api", "flow": "browse", "parent": "browse", "purpose": "Reads menu and store configuration" },
+    { "name": "order-web", "label": "Ordering website", "role": "frontend", "flow": "orders", "parent": "order", "purpose": "Submits and tracks coffee orders" },
+    { "name": "order-api", "label": "Order intake", "role": "api", "flow": "orders", "parent": "order", "purpose": "Publishes accepted orders" },
+    { "name": "order-worker", "label": "Coffee preparation", "role": "worker", "flow": "orders", "parent": "order", "purpose": "Prepares and stores completed orders" }
+  ],
+  "additionalLogSources": [
+    { "name": "order-worker-aks", "role": "worker", "flow": "worker-pod" },
+    { "name": "order-events", "role": "api", "flow": "eventhub" }
+  ],
+  "logSignals": [
+    { "name": "failed-operations", "kind": "failures", "unit": "Count", "operator": "GreaterThan", "degraded": 0, "unhealthy": 0 },
+    { "name": "heartbeat-age", "kind": "heartbeat", "unit": "Seconds", "operator": "GreaterThan", "degraded": 180, "unhealthy": 300 }
+  ],
+  "cpu": {
+    "name": "aks-cpu",
+    "label": "AKS node CPU",
+    "resourceIdKey": "aksId",
+    "namespace": "Microsoft.ContainerService/managedClusters",
+    "metric": "node_cpu_usage_percentage",
+    "aggregation": "Maximum",
+    "timeGrain": "PT5M",
+    "unit": "Percent",
+    "operator": "GreaterThan",
+    "degraded": 80,
+    "unhealthy": 95
+  },
+  "dependencies": [
+    {
+      "name": "menu-vault",
+      "parent": "browse-api",
+      "label": "Key Vault",
+      "purpose": "Reads menu configuration",
+      "access": "Private endpoint with workload identity",
+      "resourceIdKey": "vaultId",
+      "resourceHealth": "Enabled",
+      "signals": [
+        {
+          "name": "platform-metric", "label": "Availability",
+          "namespace": "Microsoft.KeyVault/vaults", "metric": "Availability",
+          "aggregation": "Average", "timeGrain": "PT5M", "unit": "Percent",
+          "operator": "LessThan", "degraded": 99, "unhealthy": 95
+        },
+        {
+          "name": "43d15233-c384-4b1e-b0d5-8310b91c9001", "label": "Overall Vault Saturation",
+          "namespace": "microsoft.keyvault/vaults", "metric": "SaturationShoebox",
+          "aggregation": "Average", "timeGrain": "PT30M", "unit": "Percent",
+          "operator": "GreaterThan", "degraded": 25, "unhealthy": 50
+        },
+        {
+          "name": "371721fe-01ca-46d5-a755-3d5d781d921a", "label": "Overall Service Api Latency",
+          "namespace": "microsoft.keyvault/vaults", "metric": "ServiceApiLatency",
+          "aggregation": "Average", "timeGrain": "PT15M", "unit": "MilliSeconds",
+          "operator": "GreaterThan", "degraded": 500, "unhealthy": 1000
+        }
+      ]
+    },
+    {
+      "name": "order-events",
+      "parent": "order-api",
+      "label": "Event Hubs",
+      "purpose": "Publishes orders to the orders event hub",
+      "access": "AMQP with workload identity",
+      "resourceIdKey": "eventNamespaceId",
+      "resourceHealth": "Disabled",
+      "signals": []
+    },
+    {
+      "name": "order-storage",
+      "parent": "order-worker",
+      "label": "Storage",
+      "purpose": "Stores prepared orders in the orders blob container",
+      "access": "HTTPS with workload identity; replay-safe writes",
+      "resourceIdKey": "storageId",
+      "resourceHealth": "Enabled",
+      "signals": [
+        {
+          "name": "22d9b47b-84c8-4d30-b799-70b5a2ba02cf", "label": "Availability",
+          "namespace": "microsoft.storage/storageaccounts", "metric": "Availability",
+          "aggregation": "Average", "timeGrain": "PT5M", "unit": "Percent",
+          "operator": "LessThan", "degraded": 100, "unhealthy": 95
+        },
+        {
+          "name": "cc88f636-8a8c-4dba-99ff-bde5c676981a", "label": "Success E2E Latency",
+          "namespace": "microsoft.storage/storageaccounts", "metric": "SuccessE2ELatency",
+          "aggregation": "Average", "timeGrain": "PT5M", "unit": "MilliSeconds",
+          "operator": "GreaterThan", "degraded": 500, "unhealthy": 1000
+        },
+        {
+          "name": "ec6a7c1a-d697-4b37-a937-61791c3615f8", "label": "Success Server Latency",
+          "namespace": "microsoft.storage/storageaccounts", "metric": "SuccessServerLatency",
+          "aggregation": "Average", "timeGrain": "PT5M", "unit": "MilliSeconds",
+          "operator": "GreaterThan", "degraded": 500, "unhealthy": 1000
+        }
+      ]
+    }
+  ]
+}

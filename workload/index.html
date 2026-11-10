@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ignite Coffee</title>
+  <style>
+    body { font: 20px system-ui; max-width: 760px; margin: 8vh auto; padding: 24px; background: #101827; color: #f1f5f9; }
+    h1 { font-size: 56px; margin-bottom: 8px; }
+    button, select { font: inherit; padding: 12px; border-radius: 8px; margin: 8px 8px 8px 0; }
+    button { background: #67e8f9; color: #101827; cursor: pointer; }
+    #status { padding: 24px; border: 2px solid #fbbf24; border-radius: 12px; }
+    .hint { color: #cbd5e1; }
+  </style>
+</head>
+<body>
+  <p class="hint">AZURE MONITOR HEALTH MODELS / IGNITE DEMO</p>
+  <h1 id="store">Ignite Coffee</h1>
+  <p>The website works. The order is accepted. But will your coffee arrive?</p>
+  <form id="order">
+    <label for="product">Coffee</label>
+    <select id="product" required aria-label="Coffee"></select>
+    <button id="submit" disabled>Place order</button>
+  </form>
+  <p id="status" role="status" aria-live="polite">Loading the menu...</p>
+  <p class="hint">Website &rarr; API &rarr; Event Hubs &rarr; worker &rarr; Blob Storage</p>
+  <script>
+    const status = document.getElementById('status');
+    let orderId;
+    async function call(path, options) {
+      const response = await fetch(path, options);
+      if (!response.ok) throw new Error('A dependency is unavailable');
+      return response.json();
+    }
+    async function menu() {
+      try {
+        const data = await call('/api/menu');
+        document.getElementById('store').textContent = data.store;
+        const select = document.getElementById('product');
+        for (const product of data.menu) select.add(new Option(product.name, product.id));
+        document.getElementById('submit').disabled = false;
+        status.textContent = 'Menu is healthy. Place an order to check the whole journey.';
+      } catch (error) { status.textContent = error.message; }
+    }
+    document.getElementById('order').onsubmit = async event => {
+      event.preventDefault();
+      try {
+        const data = await call('/api/orders', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({product: document.getElementById('product').value})
+        });
+        orderId = data.id;
+        status.textContent = 'Order accepted. Waiting for coffee preparation...';
+      } catch (error) { status.textContent = error.message; }
+    };
+    setInterval(async () => {
+      if (!orderId) return;
+      try {
+        const data = await call('/api/orders/' + orderId);
+        status.textContent = data.status === 'ready'
+          ? 'Your coffee is ready! The end-to-end journey is healthy.'
+          : 'Order accepted, but still waiting for coffee preparation.';
+      } catch (error) { status.textContent = error.message; }
+    }, 3000);
+    menu();
+  </script>
+</body>
+</html>

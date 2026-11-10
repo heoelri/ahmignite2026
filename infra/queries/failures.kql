@@ -1,0 +1,7 @@
+ContainerLogV2
+| where TimeGenerated > ago(2m)
+| where _ResourceId =~ '__CLUSTER_ID__' and PodNamespace == 'ignite-demo'
+| extend event = parse_json(tostring(LogMessage))
+| where tostring(event.kind) == 'health' and tostring(event.role) == '__ROLE__' and tostring(event.flow) == '__FLOW__'
+| summarize value = max(toint(event.failures))
+| project value = coalesce(value, 0)
